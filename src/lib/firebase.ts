@@ -55,6 +55,9 @@ if (isConfigValid) {
 export { db, auth, storage, appCheck };
 
 export const googleProvider = new GoogleAuthProvider();
+// Use select_account to force user to pick an account if needed, but not strictly required
+googleProvider.setCustomParameters({ prompt: 'select_account' });
+
 export const githubProvider = new GithubAuthProvider();
 export const facebookProvider = new FacebookAuthProvider();
 export const linkedinProvider = new OAuthProvider('linkedin.com');

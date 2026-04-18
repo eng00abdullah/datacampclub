@@ -24,6 +24,7 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [processingRedirect, setProcessingRedirect] = useState(false);
   const navigate = useNavigate();
 
   // Handle Redirect Result
@@ -34,38 +35,62 @@ const Login = () => {
       try {
         const result = await getRedirectResult(auth);
         if (result) {
+          setProcessingRedirect(true);
           const user = result.user;
           
-          // Check if user exists in Firestore (Logic moved from handleSocialLogin)
-          const userDoc = await getDoc(doc(db, 'users', user.uid));
-          if (!userDoc.exists()) {
-            const memberId = await generateMemberId(demoUsers);
-            const role = 'member';
-
-            await setDoc(doc(db, 'users', user.uid), {
-              uid: user.uid,
-              email: user.email,
-              fullName: user.displayName || 'New Member',
-              role,
-              memberId,
-              status: 'active',
-              isVerified: user.emailVerified,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            });
+          // 1. First check if the user already exists in Firestore by UID
+          const userRef = doc(db, 'users', user.uid);
+          const userDoc = await getDoc(userRef);
+          
+          if (userDoc.exists()) {
+            toast.success('Welcome back!');
+            // Complete operations before navigating
+            navigate('/dashboard');
+            return;
           }
 
+          // 2. If not, create the user document
+          const memberId = await generateMemberId(demoUsers);
+          const role = 'member';
+
+          await setDoc(userRef, {
+            uid: user.uid,
+            email: user.email,
+            fullName: user.displayName || 'New Member',
+            role,
+            memberId,
+            status: 'active',
+            isVerified: user.emailVerified,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+
+          // 3. The navigate must happen AFTER all Firestore operations complete
           toast.success('Authentication Successful.');
           navigate('/dashboard');
         }
       } catch (error: any) {
-        console.error("Redirect login error:", error);
-        toast.error(error.message || 'Social Login failed.');
+        if (error.code !== 'auth/null-user' && error.code !== 'auth/no-auth-event') {
+          console.error("Redirect login error:", error);
+          toast.error(error.message || 'Social Login failed.');
+        }
+      } finally {
+        setProcessingRedirect(false);
       }
     };
 
     handleRedirect();
   }, [navigate]);
+
+  if (processingRedirect) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center space-y-4">
+        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        <h2 className="text-xl font-cyber text-primary animate-pulse tracking-widest">VERIFYING_CREDENTIALS...</h2>
+        <p className="text-muted-foreground text-xs uppercase tracking-tighter">Establishing secure connection to the grid</p>
+      </div>
+    );
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

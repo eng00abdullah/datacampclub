@@ -33,6 +33,7 @@ const Register = () => {
     academicYear: '',
   });
   const [loading, setLoading] = useState(false);
+  const [processingRedirect, setProcessingRedirect] = useState(false);
   const navigate = useNavigate();
 
   // Handle Redirect Result
@@ -43,32 +44,37 @@ const Register = () => {
       try {
         const result = await getRedirectResult(auth);
         if (result) {
+          setProcessingRedirect(true);
           const user = result.user;
           
-          // Check for existing "pre-created" record by email
+          // 1. First check if the user already exists in Firestore by UID
+          const userRef = doc(db, 'users', user.uid);
+          const userDoc = await getDoc(userRef);
+          
+          if (userDoc.exists()) {
+            toast.success('Welcome back!');
+            // Complete operations before navigating
+            navigate('/dashboard');
+            return;
+          }
+
+          // 2. If not, create the user document
+          // Check for existing "pre-created" record by email (migration/cleanup check)
           const existingDoc = await checkExistingUser(user.email || '');
           let existingData: any = {};
           
           if (existingDoc) {
             existingData = existingDoc.data();
             if (existingDoc.id !== user.uid) {
-              const { deleteDoc, doc } = await import('firebase/firestore');
-              await deleteDoc(doc(db, 'users', existingDoc.id));
-            }
-          } else {
-            // Fallback to direct UID lookup
-            const userDoc = await getDoc(doc(db, 'users', user.uid));
-            if (userDoc.exists()) {
-              toast.success('Welcome back!');
-              navigate('/dashboard');
-              return;
+              const { deleteDoc, doc: firestoreDoc } = await import('firebase/firestore');
+              await deleteDoc(firestoreDoc(db, 'users', existingDoc.id));
             }
           }
 
           const memberId = await generateMemberId(demoUsers);
           const role = 'member';
 
-          await setDoc(doc(db, 'users', user.uid), {
+          await setDoc(userRef, {
             email: user.email?.toLowerCase().trim(),
             fullName: user.displayName || 'New Member',
             phoneNumber: user.phoneNumber || '',
@@ -84,7 +90,8 @@ const Register = () => {
             uid: user.uid,
           });
 
-          toast.success('Account initialized via social identity.');
+          // 3. The navigate must happen AFTER all Firestore operations complete
+          toast.success('Account initialized successfully.');
           navigate('/dashboard');
         }
       } catch (error: any) {
@@ -92,11 +99,23 @@ const Register = () => {
           console.error("Social Registration error:", error);
           toast.error(error.message || 'Social Registration failed.');
         }
+      } finally {
+        setProcessingRedirect(false);
       }
     };
 
     handleRedirect();
   }, [navigate]);
+
+  if (processingRedirect) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center space-y-4">
+        <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        <h2 className="text-xl font-cyber text-primary animate-pulse tracking-widest">INITIALIZING_SECURE_SESSION...</h2>
+        <p className="text-muted-foreground text-xs uppercase tracking-tighter">Please wait while your profile is being synchronized</p>
+      </div>
+    );
+  }
 
   const isRegistrationClosed = settings && !settings.enableRegistration;
 
