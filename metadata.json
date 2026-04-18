@@ -1,0 +1,7 @@
+{
+  "name": "DataCamp Student Club Platform",
+  "description": "A premium, production-ready digital ecosystem for university student clubs featuring a member portal, admin dashboard, and real-time sync.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

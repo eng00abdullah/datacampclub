@@ -1,0 +1,161 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "System user with role and profile information",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "fullName": { "type": "string" },
+        "role": { "type": "string", "enum": ["super_admin", "admin", "hr_organizer", "organizer", "hr_manager", "event_manager", "mentor", "member"] },
+        "memberId": { "type": "string" },
+        "faculty": { "type": "string" },
+        "status": { "type": "string", "enum": ["active", "inactive"] },
+        "isVerified": { "type": "boolean" }
+      },
+      "required": ["uid", "email", "fullName", "role", "memberId"]
+    },
+    "Event": {
+      "title": "Event",
+      "description": "Club event or workshop",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "date": { "type": "string" },
+        "location": { "type": "string" },
+        "capacity": { "type": "number" },
+        "registeredCount": { "type": "number" },
+        "status": { "type": "string" },
+        "organizers": { "type": "array" }
+      }
+    },
+    "Staff": {
+      "title": "Staff",
+      "description": "Core team member",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "category": { "type": "string" },
+        "image": { "type": "string" },
+        "linkedUser": { "type": "string" }
+      }
+    },
+    "BlogPost": {
+      "title": "BlogPost",
+      "description": "Article or news transmission",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "excerpt": { "type": "string" },
+        "author": { "type": "string" },
+        "date": { "type": "string" }
+      }
+    },
+    "Project": {
+      "title": "Project",
+      "description": "Technical portfolio project",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "tech": { "type": "string" },
+        "link": { "type": "string" },
+        "category": { "type": "string" },
+        "image": { "type": "string" },
+        "author": { "type": "string" }
+      }
+    },
+    "GalleryImage": {
+      "title": "GalleryImage",
+      "description": "Visual asset in archive",
+      "type": "object",
+      "properties": {
+        "url": { "type": "string" },
+        "title": { "type": "string" }
+      }
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Global site configuration",
+      "type": "object",
+      "properties": {
+        "siteName": { "type": "string" },
+        "siteDescription": { "type": "string" },
+        "contactEmail": { "type": "string" },
+        "logoUrl": { "type": "string" }
+      }
+    },
+    "AboutContent": {
+      "title": "AboutContent",
+      "description": "Content for the About page",
+      "type": "object",
+      "properties": {
+        "mission": { "type": "string" },
+        "vision": { "type": "string" },
+        "history": { "type": "string" }
+      }
+    },
+    "IdCounter": {
+      "title": "IdCounter",
+      "description": "Global counter for auto-generating IDs",
+      "type": "object",
+      "properties": {
+        "count": { "type": "number" }
+      }
+    },
+    "SecuritySettings": {
+      "title": "SecuritySettings",
+      "description": "Security configuration and protocol status",
+      "type": "object",
+      "properties": {
+        "mfaEnforced": { "type": "boolean" },
+        "threatLevel": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL"] },
+        "firewallActive": { "type": "boolean" },
+        "blockedIpsCount": { "type": "number" },
+        "activeConnections": { "type": "number" }
+      }
+    },
+    "AuditLog": {
+      "title": "AuditLog",
+      "description": "System-wide administrative action log",
+      "type": "object",
+      "properties": {
+        "action": { "type": "string" },
+        "user": { "type": "string" },
+        "target": { "type": "string" },
+        "ip": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "status": { "type": "string" }
+      }
+    },
+    "OTP": {
+      "title": "OTP",
+      "description": "One-time password for secure actions",
+      "type": "object",
+      "properties": {
+        "target": { "type": "string" },
+        "otp": { "type": "string" },
+        "type": { "type": "string", "enum": ["email", "phone"] },
+        "expiresAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": { "schema": "User", "description": "Member profiles" },
+    "/events/{eventId}": { "schema": "Event", "description": "Club events" },
+    "/staff/{memberId}": { "schema": "Staff", "description": "Core team" },
+    "/blog_posts/{postId}": { "schema": "BlogPost", "description": "Blog archive" },
+    "/projects/{projectId}": { "schema": "Project", "description": "Technical portfolio" },
+    "/gallery/{imageId}": { "schema": "GalleryImage", "description": "Visual archive" },
+    "/settings/site": { "schema": "Settings", "description": "Global configuration" },
+    "/settings/about": { "schema": "AboutContent", "description": "About page content" },
+    "/settings/security": { "schema": "SecuritySettings", "description": "Security protocol configuration" },
+    "/audit_logs/{logId}": { "schema": "AuditLog", "description": "System audit trail" },
+    "/otps/{otpId}": { "schema": "OTP", "description": "One-time passwords for verification" },
+    "/id_counters/global": { "schema": "IdCounter", "description": "Sequential ID counter" }
+  }
+}
