@@ -100,14 +100,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!firebaseUser) {
         setProfile(null);
         setLoading(false);
-      } else if (firebaseUser.emailVerified) {
-        // Sync verification status to Firestore if it's not already updated
-        try {
-          const userRef = doc(db, 'users', firebaseUser.uid);
-          await updateDoc(userRef, { isVerified: true });
-        } catch (err) {
-          console.error("Error syncing verification status:", err);
+      } else {
+        // Sync email verification status
+        if (firebaseUser.emailVerified) {
+          try {
+            const userRef = doc(db, 'users', firebaseUser.uid);
+            await updateDoc(userRef, { isVerified: true });
+          } catch (err) {
+            console.error("Error syncing verification status:", err);
+          }
         }
+        // Note: loading will be handled by the profile useEffect when firebaseUser is present
       }
     });
 
@@ -128,8 +131,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLoading(false);
       });
       return () => unsubscribeProfile();
+    } else if (isFirebaseReady && user && profile) {
+      setLoading(false);
+    } else if (isFirebaseReady && !user) {
+      setLoading(false);
     }
-  }, [user, isFirebaseReady]);
+  }, [user, profile, isFirebaseReady]);
 
   const isSuperAdmin = profile?.role === 'super_admin';
   const isAdmin = isSuperAdmin || profile?.role === 'admin';
