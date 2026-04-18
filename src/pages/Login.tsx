@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { signInWithEmailAndPassword, signInWithPopup } from 'firebase/auth';
+import { 
+  signInWithEmailAndPassword, 
+  signInWithPopup, 
+  signInWithRedirect, 
+  getRedirectResult 
+} from 'firebase/auth';
 import { auth, googleProvider, githubProvider, linkedinProvider, isFirebaseReady } from '../lib/firebase';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../components/ui/Card';
 import { toast } from 'sonner';
 import { Mail, Lock, Chrome, Github, Linkedin } from 'lucide-react';
-import { doc, getDoc, setDoc, runTransaction } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { hashPassword } from '../lib/utils';
@@ -20,6 +25,47 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  // Handle Redirect Result
+  useEffect(() => {
+    if (!isFirebaseReady) return;
+
+    const handleRedirect = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result) {
+          const user = result.user;
+          
+          // Check if user exists in Firestore (Logic moved from handleSocialLogin)
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          if (!userDoc.exists()) {
+            const memberId = await generateMemberId(demoUsers);
+            const role = 'member';
+
+            await setDoc(doc(db, 'users', user.uid), {
+              uid: user.uid,
+              email: user.email,
+              fullName: user.displayName || 'New Member',
+              role,
+              memberId,
+              status: 'active',
+              isVerified: user.emailVerified,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            });
+          }
+
+          toast.success('Authentication Successful.');
+          navigate('/dashboard');
+        }
+      } catch (error: any) {
+        console.error("Redirect login error:", error);
+        toast.error(error.message || 'Social Login failed.');
+      }
+    };
+
+    handleRedirect();
+  }, [navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,33 +111,10 @@ const Login = () => {
     }
     setLoading(true);
     try {
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-
-      // Check if user exists in Firestore
-      const userDoc = await getDoc(doc(db, 'users', user.uid));
-      if (!userDoc.exists()) {
-        const memberId = await generateMemberId(demoUsers);
-        const role = 'member';
-
-        await setDoc(doc(db, 'users', user.uid), {
-          uid: user.uid,
-          email: user.email,
-          fullName: user.displayName || 'New Member',
-          role,
-          memberId,
-          status: 'active',
-          isVerified: user.emailVerified,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        });
-      }
-
-      toast.success('Authentication Successful.');
-      navigate('/dashboard');
+      // Switch to Redirect for better reliability across domains
+      await signInWithRedirect(auth, provider);
     } catch (error: any) {
-      toast.error(error.message || 'Social Login failed.');
-    } finally {
+      toast.error(error.message || 'Social Login failed to initialize.');
       setLoading(false);
     }
   };
