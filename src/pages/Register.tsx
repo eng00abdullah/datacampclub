@@ -4,6 +4,8 @@ import {
   createUserWithEmailAndPassword, 
   sendEmailVerification, 
   signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
 } from 'firebase/auth';
 import { doc, setDoc, runTransaction, getDoc } from 'firebase/firestore';
 import { auth, db, isFirebaseReady, googleProvider, githubProvider, linkedinProvider } from '../lib/firebase';
@@ -32,6 +34,69 @@ const Register = () => {
   });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  // Handle Redirect Result
+  useEffect(() => {
+    if (!isFirebaseReady) return;
+
+    const handleRedirect = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result) {
+          const user = result.user;
+          
+          // Check for existing "pre-created" record by email
+          const existingDoc = await checkExistingUser(user.email || '');
+          let existingData: any = {};
+          
+          if (existingDoc) {
+            existingData = existingDoc.data();
+            if (existingDoc.id !== user.uid) {
+              const { deleteDoc, doc } = await import('firebase/firestore');
+              await deleteDoc(doc(db, 'users', existingDoc.id));
+            }
+          } else {
+            // Fallback to direct UID lookup
+            const userDoc = await getDoc(doc(db, 'users', user.uid));
+            if (userDoc.exists()) {
+              toast.success('Welcome back!');
+              navigate('/dashboard');
+              return;
+            }
+          }
+
+          const memberId = await generateMemberId(demoUsers);
+          const role = 'member';
+
+          await setDoc(doc(db, 'users', user.uid), {
+            email: user.email?.toLowerCase().trim(),
+            fullName: user.displayName || 'New Member',
+            phoneNumber: user.phoneNumber || '',
+            faculty: '',
+            academicYear: '',
+            ...existingData,
+            role: 'member',
+            memberId,
+            status: 'active',
+            isVerified: user.emailVerified,
+            createdAt: existingData?.createdAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            uid: user.uid,
+          });
+
+          toast.success('Account initialized via social identity.');
+          navigate('/dashboard');
+        }
+      } catch (error: any) {
+        if (error.code !== 'auth/null-user' && error.code !== 'auth/no-auth-event') {
+          console.error("Social Registration error:", error);
+          toast.error(error.message || 'Social Registration failed.');
+        }
+      }
+    };
+
+    handleRedirect();
+  }, [navigate]);
 
   const isRegistrationClosed = settings && !settings.enableRegistration;
 
@@ -161,53 +226,10 @@ const Register = () => {
     }
     setLoading(true);
     try {
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-      
-      // Check for existing "pre-created" record by email
-      const existingDoc = await checkExistingUser(user.email || '');
-      let existingData: any = {};
-      
-      if (existingDoc) {
-        existingData = existingDoc.data();
-        if (existingDoc.id !== user.uid) {
-          const { deleteDoc, doc } = await import('firebase/firestore');
-          await deleteDoc(doc(db, 'users', existingDoc.id));
-        }
-      } else {
-        // Fallback to direct UID lookup
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) {
-          toast.success('Welcome back!');
-          navigate('/dashboard');
-          return;
-        }
-      }
-
-      const memberId = await generateMemberId(demoUsers);
-      const role = 'member';
-
-      await setDoc(doc(db, 'users', user.uid), {
-        email: user.email?.toLowerCase().trim(),
-        fullName: user.displayName || 'New Member',
-        phoneNumber: user.phoneNumber || '',
-        faculty: '',
-        academicYear: '',
-        ...existingData,
-        role: 'member',
-        memberId,
-        status: 'active',
-        isVerified: user.emailVerified,
-        createdAt: existingData?.createdAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        uid: user.uid,
-      });
-
-      toast.success('Account initialized via social login.');
-      navigate('/dashboard');
+      // Switch to Redirect for better reliability across domains
+      await signInWithRedirect(auth, provider);
     } catch (error: any) {
-      toast.error(error.message || 'Social login failed.');
-    } finally {
+      toast.error(error.message || 'Social Registration failed to initialize.');
       setLoading(false);
     }
   };
