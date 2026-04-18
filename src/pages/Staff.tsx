@@ -18,6 +18,8 @@ const Staff = () => {
     const q = query(collection(db, 'staff'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setStaff(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.warn("Staff posts listener error:", error);
     });
     return () => unsubscribe();
   }, []);

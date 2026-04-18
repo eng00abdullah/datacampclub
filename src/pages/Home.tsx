@@ -24,10 +24,14 @@ const Home = () => {
 
     const unsubscribeSettings = onSnapshot(doc(db, 'settings', 'site'), (snapshot) => {
       if (snapshot.exists()) setSettings(snapshot.data());
+    }, (error) => {
+      console.warn("Home settings listener error:", error);
     });
 
     const unsubscribeContent = onSnapshot(doc(db, 'settings', 'home'), (snapshot) => {
       if (snapshot.exists()) setHomeContent(snapshot.data());
+    }, (error) => {
+      console.warn("Home content listener error:", error);
     });
 
     return () => {

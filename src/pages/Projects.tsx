@@ -18,6 +18,8 @@ const Projects = () => {
     const q = query(collection(db, 'projects'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setProjects(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.warn("Projects posts listener error:", error);
     });
     return () => unsubscribe();
   }, []);

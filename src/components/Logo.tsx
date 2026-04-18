@@ -33,6 +33,8 @@ const Logo: React.FC<LogoProps> = ({
       if (snapshot.exists()) {
         setSettings(snapshot.data());
       }
+    }, (error) => {
+      console.warn("Logo settings listener error:", error);
     });
     return () => unsubscribe();
   }, []);

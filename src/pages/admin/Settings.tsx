@@ -23,6 +23,8 @@ const Settings = () => {
       if (snapshot.exists()) {
         setSettings(snapshot.data() as any);
       }
+    }, (error) => {
+      console.warn("Settings listener permission error:", error);
     });
     return () => unsubscribe();
   }, []);

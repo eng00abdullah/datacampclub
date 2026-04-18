@@ -25,6 +25,8 @@ const GalleryManagement = () => {
     const q = query(collection(db, 'gallery'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setImages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.warn("Gallery listener permission error:", error);
     });
     return () => unsubscribe();
   }, []);

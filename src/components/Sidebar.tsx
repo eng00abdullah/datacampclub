@@ -62,6 +62,8 @@ const Sidebar = ({ isOpen, setIsOpen }: { isOpen: boolean, setIsOpen: (val: bool
       if (snapshot.exists()) {
         setSettings(snapshot.data());
       }
+    }, (error) => {
+      console.warn("Sidebar settings listener error:", error);
     });
     return () => unsubscribe();
   }, []);

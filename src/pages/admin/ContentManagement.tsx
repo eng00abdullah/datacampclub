@@ -28,10 +28,14 @@ const ContentManagement = () => {
 
     const unsubHome = onSnapshot(doc(db, 'settings', 'home'), (snapshot) => {
       if (snapshot.exists()) setHomeContent(snapshot.data() as any);
+    }, (error) => {
+      console.warn("Home content listener error:", error);
     });
 
     const unsubAbout = onSnapshot(doc(db, 'settings', 'about'), (snapshot) => {
       if (snapshot.exists()) setAboutData(snapshot.data() as any);
+    }, (error) => {
+      console.warn("About data listener error:", error);
     });
 
     return () => {

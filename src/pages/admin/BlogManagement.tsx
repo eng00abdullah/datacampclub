@@ -29,12 +29,16 @@ const BlogManagement = () => {
     const postsQuery = query(collection(db, 'blog_posts'));
     const unsubscribePosts = onSnapshot(postsQuery, (snapshot) => {
       setPosts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.warn("Blog posts listener error:", error);
     });
 
     // Fetch Users
     const usersQuery = query(collection(db, 'users'));
     const unsubscribeUsers = onSnapshot(usersQuery, (snapshot) => {
       setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.warn("Users listener error:", error);
     });
 
     return () => {

@@ -24,6 +24,9 @@ const MessageManagement = () => {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setMessages(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       setLoading(false);
+    }, (error) => {
+      console.warn("Messages listener permission error:", error);
+      setLoading(false);
     });
     return () => unsubscribe();
   }, []);

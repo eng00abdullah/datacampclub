@@ -41,6 +41,8 @@ const EventManagement = () => {
     const q = query(collection(db, 'users'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.warn("Users listener error in EventManagement:", error);
     });
     return () => unsubscribe();
   }, []);
@@ -155,6 +157,9 @@ const EventManagement = () => {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const eventsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setEvents(eventsData);
+      setLoading(false);
+    }, (error) => {
+      console.warn("Events listener error in EventManagement:", error);
       setLoading(false);
     });
     return () => unsubscribe();

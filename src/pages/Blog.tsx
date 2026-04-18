@@ -18,6 +18,8 @@ const Blog = () => {
     const q = query(collection(db, 'blog_posts'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       setPosts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.warn("Blog posts listener error:", error);
     });
     return () => unsubscribe();
   }, []);

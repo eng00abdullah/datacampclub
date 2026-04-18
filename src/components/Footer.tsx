@@ -20,6 +20,8 @@ const Footer = () => {
       if (snapshot.exists()) {
         setSettings(snapshot.data());
       }
+    }, (error) => {
+      console.warn("Footer settings listener error:", error);
     });
     return () => unsubscribe();
   }, []);

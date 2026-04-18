@@ -37,12 +37,16 @@ const StaffManagement = () => {
     const staffQuery = query(collection(db, 'staff'));
     const unsubscribeStaff = onSnapshot(staffQuery, (snapshot) => {
       setStaff(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.warn("Staff listener error:", error);
     });
 
     // Fetch Users for linking
     const usersQuery = query(collection(db, 'users'));
     const unsubscribeUsers = onSnapshot(usersQuery, (snapshot) => {
       setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    }, (error) => {
+      console.warn("Users listener error:", error);
     });
 
     return () => {

@@ -14,10 +14,12 @@ const About = () => {
       return;
     }
 
-    const unsubscribe = onSnapshot(doc(db, 'settings', 'about'), (doc) => {
-      if (doc.exists()) {
-        setAboutData(doc.data() as any);
+    const unsubscribe = onSnapshot(doc(db, 'settings', 'about'), (snapshot) => {
+      if (snapshot.exists()) {
+        setAboutData(snapshot.data() as any);
       }
+    }, (error) => {
+      console.warn("About data listener error:", error);
     });
 
     return () => unsubscribe();
