@@ -46,8 +46,11 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   if (loading) return <div className="h-screen flex items-center justify-center font-cyber text-primary animate-pulse">VERIFYING_ACCESS...</div>;
   if (!user) return <Navigate to="/login" />;
   
-  // Enforce email verification in production
-  if (isFirebaseReady && !user.emailVerified && !profile?.isVerified) {
+  // Enforce email verification in production, but prioritize Firebase Auth state
+  // This allows Google users (who are verified by default) to pass even if profile sync is pending
+  const isVerified = user.emailVerified || profile?.isVerified;
+  
+  if (isFirebaseReady && !isVerified) {
     return <Navigate to="/verify-email" />;
   }
   

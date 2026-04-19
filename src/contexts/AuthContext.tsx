@@ -141,22 +141,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setProfile(null);
         setLoading(false);
       } else {
-        // Sync email verification status
+        // Sync email verification status and ensure profile exists
         if (firebaseUser.emailVerified) {
           try {
             const userRef = doc(db, 'users', firebaseUser.uid);
             const snap = await getDoc(userRef);
-            if (snap.exists() && !snap.data().isVerified) {
-              await updateDoc(userRef, { 
+            
+            if (snap.exists()) {
+              const data = snap.data() as UserProfile;
+              if (!data.isVerified) {
+                await updateDoc(userRef, { 
+                  isVerified: true,
+                  updatedAt: new Date().toISOString()
+                });
+              }
+            } else {
+              // If user is authenticated in Auth but not in Firestore, 
+              // we must create a basic profile to avoid deadlocks
+              const memberId = await generateMemberId(demoUsers);
+              await setDoc(userRef, {
+                uid: firebaseUser.uid,
+                email: firebaseUser.email,
+                fullName: firebaseUser.displayName || 'New Member',
+                role: 'member',
+                memberId,
+                status: 'active',
                 isVerified: true,
-                updatedAt: new Date().toISOString()
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
               });
             }
           } catch (err) {
-            console.warn("Could not sync verification status (possibly doc creation still in progress):", err);
+            console.warn("Could not sync verification or profile:", err);
           }
         }
-        // Note: loading will be handled by the profile useEffect when firebaseUser is present
+        // Loading will resolve in the profile useEffect
       }
     });
 
