@@ -1,7 +1,10 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { onAuthStateChanged, User as FirebaseUser, signOut } from 'firebase/auth';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { onAuthStateChanged, User as FirebaseUser, signOut, getRedirectResult } from 'firebase/auth';
+import { doc, onSnapshot, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db, isFirebaseReady } from '../lib/firebase';
+import { generateMemberId } from '../lib/memberUtils';
+import { demoUsers } from '../lib/demoData';
+import { toast } from 'sonner';
 
 interface UserProfile {
   uid: string;
@@ -11,23 +14,14 @@ interface UserProfile {
   memberId: string;
   isVerified: boolean;
   status: string;
-  faculty?: string;
-  academicYear?: string;
 }
 
 interface AuthContextType {
   user: FirebaseUser | null;
   profile: UserProfile | null;
   loading: boolean;
-  isSuperAdmin: boolean;
-  isAdmin: boolean;
-  isHR: boolean;
-  isEventManager: boolean;
-  isContentManager: boolean;
-  isFinanceManager: boolean;
-  isOrganizer: boolean;
-  isManager: boolean;
   logout: () => Promise<void>;
+  isManager: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -43,11 +37,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
+    // Handle Landing from Google Redirect
+    const handleLanding = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result?.user) {
+          toast.success('Establishing digital identity...');
+        }
+      } catch (error: any) {
+        if (error.code !== 'auth/no-auth-event') {
+          console.error("Landing error:", error);
+        }
+      }
+    };
+    handleLanding();
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
+      
       if (!firebaseUser) {
         setProfile(null);
         setLoading(false);
+      } else {
+        // Essential: Check/Create Firestore Profile for ANY auth change
+        const userRef = doc(db, 'users', firebaseUser.uid);
+        const snap = await getDoc(userRef);
+        
+        if (!snap.exists()) {
+          const memberId = await generateMemberId(demoUsers);
+          await setDoc(userRef, {
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            fullName: firebaseUser.displayName || 'New Member',
+            role: 'member',
+            memberId,
+            status: 'active',
+            isVerified: firebaseUser.emailVerified || true, // Treat social login as verified
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+        }
       }
     });
 
@@ -62,7 +91,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         setLoading(false);
       }, (error) => {
-        console.error("Profile sync error:", error);
+        console.error("Sync error:", error);
         setLoading(false);
       });
       return () => unsubscribeProfile();
@@ -70,24 +99,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user]);
 
   const logout = () => signOut(auth);
-
-  const role = profile?.role || '';
-  const isSuperAdmin = role === 'super_admin';
-  const isAdmin = isSuperAdmin || role === 'admin';
-  const isHR = isSuperAdmin || ['hr_organizer', 'hr_manager', 'hr_member'].includes(role);
-  const isEventManager = isSuperAdmin || role === 'event_manager';
-  const isContentManager = isSuperAdmin || role === 'content_manager';
-  const isFinanceManager = isSuperAdmin || role === 'finance_manager';
-  const isOrganizer = isSuperAdmin || role === 'organizer';
-  const isManager = isAdmin || isHR || isEventManager || isContentManager || isFinanceManager || isOrganizer;
+  const isManager = ['admin', 'super_admin', 'hr_manager', 'event_manager', 'content_manager'].includes(profile?.role || '');
 
   return (
-    <AuthContext.Provider value={{ 
-      user, profile, loading, 
-      isSuperAdmin, isAdmin, isHR, isEventManager, 
-      isContentManager, isFinanceManager, isOrganizer, 
-      isManager, logout 
-    }}>
+    <AuthContext.Provider value={{ user, profile, loading, logout, isManager }}>
       {children}
     </AuthContext.Provider>
   );
