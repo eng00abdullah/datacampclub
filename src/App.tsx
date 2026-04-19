@@ -43,16 +43,20 @@ const GuestRoute = ({ children }: { children: React.ReactNode }) => {
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { user, profile, loading } = useAuth();
+  
+  // If we have a user, let them through even if loading profile
+  // This prevents getting stuck on "VERIFYING_ACCESS"
+  if (user) {
+    // Optional: still check for email verification if you want
+    const isVerified = user.emailVerified || profile?.isVerified;
+    if (isFirebaseReady && !isVerified) {
+      return <Navigate to="/verify-email" />;
+    }
+    return <>{children}</>;
+  }
+
   if (loading) return <div className="h-screen flex items-center justify-center font-cyber text-primary animate-pulse">VERIFYING_ACCESS...</div>;
   if (!user) return <Navigate to="/login" />;
-  
-  // Enforce email verification in production, but prioritize Firebase Auth state
-  // This allows Google users (who are verified by default) to pass even if profile sync is pending
-  const isVerified = user.emailVerified || profile?.isVerified;
-  
-  if (isFirebaseReady && !isVerified) {
-    return <Navigate to="/verify-email" />;
-  }
   
   return <>{children}</>;
 };

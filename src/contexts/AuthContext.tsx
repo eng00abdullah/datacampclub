@@ -97,44 +97,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    // Handle Redirect Result
-    getRedirectResult(auth).then(async (result) => {
-      if (result?.user) {
-        setLoading(true);
-        const user = result.user;
-        const userRef = doc(db, 'users', user.uid);
-        const userDoc = await getDoc(userRef);
-
-        if (!userDoc.exists()) {
-          const memberId = await generateMemberId(demoUsers);
-          await setDoc(userRef, {
-            uid: user.uid,
-            email: user.email,
-            fullName: user.displayName || 'New Member',
-            role: 'member',
-            memberId,
-            status: 'active',
-            isVerified: user.emailVerified,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          });
-          toast.success('Account initialized via Identity Provider.');
-        } else {
-          toast.success('Welcome back!');
-        }
-        
-        // Force sync redirect to dashboard if user is on auth pages
-        if (window.location.pathname === '/login' || window.location.pathname === '/register') {
-          window.location.href = '/dashboard';
-        }
-      }
-    }).catch((error) => {
-      console.error("Redirect Auth Error:", error);
-      if (error.code !== 'auth/no-auth-event') {
-        toast.error(error.message);
-      }
-    });
-
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       if (!firebaseUser) {
@@ -196,7 +158,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLoading(false);
       });
       return () => unsubscribeProfile();
-    } else if (isFirebaseReady && user && profile) {
+    } else if (isFirebaseReady && user) {
+      // If we have a user, we can release the main loading state
+      // Individual components can still handle null profile if needed
       setLoading(false);
     } else if (isFirebaseReady && !user) {
       setLoading(false);
