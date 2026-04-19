@@ -91,11 +91,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     if (!isFirebaseReady) {
-      // In Demo Mode, we don't persist users across reloads for security audits
-      // Operatives must re-authenticate to simulate fresh access
       setLoading(false);
       return;
     }
+
+    // Capture Redirect Results
+    getRedirectResult(auth).then(async (result) => {
+      if (result?.user) {
+        setLoading(true);
+        const user = result.user;
+        const userRef = doc(db, 'users', user.uid);
+        const userDoc = await getDoc(userRef);
+        if (!userDoc.exists()) {
+          const memberId = await generateMemberId(demoUsers);
+          await setDoc(userRef, {
+            uid: user.uid,
+            email: user.email,
+            fullName: user.displayName || 'New Member',
+            role: 'member',
+            memberId,
+            status: 'active',
+            isVerified: true,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+        }
+        window.location.href = '/dashboard';
+      }
+    }).catch(console.error);
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
