@@ -102,7 +102,9 @@ service cloud.firestore {
 
     match /id_counters/{counterId} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin() || isHR();
+      allow update: if isAuthenticated() && counterId == 'global' && 
+                     request.resource.data.count == resource.data.count + 1;
+      allow create, delete: if isAdmin() || isHR();
     }
   }
 }

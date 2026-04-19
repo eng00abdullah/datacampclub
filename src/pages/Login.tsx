@@ -139,38 +139,11 @@ const Login = () => {
     
     setSocialLoading(true);
     try {
-      const result = await signInWithPopup(auth, provider);
-      const user = result.user;
-      
-      // 1. Check if user document exists
-      const userRef = doc(db, 'users', user.uid);
-      const userDoc = await getDoc(userRef);
-      
-      if (!userDoc.exists()) {
-        const memberId = await generateMemberId(demoUsers);
-        await setDoc(userRef, {
-          uid: user.uid,
-          email: user.email,
-          fullName: user.displayName || 'New Member',
-          role: 'member',
-          memberId,
-          status: 'active',
-          isVerified: user.emailVerified,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        });
-      }
-
-      toast.success('Access Granted.');
-      navigate('/dashboard');
+      // Use Redirect - results are now handled globally in AuthContext.tsx
+      await signInWithRedirect(auth, provider);
     } catch (error: any) {
       console.error("Login Error:", error);
-      if (error.code === 'auth/popup-blocked') {
-        toast.error('The popup was blocked by your browser. Please allow popups for this site.');
-      } else {
-        toast.error(error.message || 'Social Login failed.');
-      }
-    } finally {
+      toast.error(error.message || 'Social Login failed to initialize.');
       setSocialLoading(false);
     }
   };

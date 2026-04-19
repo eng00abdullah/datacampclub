@@ -1,8 +1,10 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { doc, onSnapshot, updateDoc, getDoc } from 'firebase/firestore';
+import { onAuthStateChanged, User as FirebaseUser, getRedirectResult } from 'firebase/auth';
+import { doc, onSnapshot, updateDoc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db, isFirebaseReady } from '../lib/firebase';
-import { demoSettings } from '../lib/demoData';
+import { demoSettings, demoUsers } from '../lib/demoData';
+import { generateMemberId } from '../lib/memberUtils';
+import { toast } from 'sonner';
 
 interface UserProfile {
   uid: string;
@@ -95,6 +97,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
+    // Handle Redirect Result
+    getRedirectResult(auth).then(async (result) => {
+      if (result?.user) {
+        setLoading(true);
+        const user = result.user;
+        const userRef = doc(db, 'users', user.uid);
+        const userDoc = await getDoc(userRef);
+
+        if (!userDoc.exists()) {
+          const memberId = await generateMemberId(demoUsers);
+          await setDoc(userRef, {
+            uid: user.uid,
+            email: user.email,
+            fullName: user.displayName || 'New Member',
+            role: 'member',
+            memberId,
+            status: 'active',
+            isVerified: user.emailVerified,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+          toast.success('Account initialized via Identity Provider.');
+        } else {
+          toast.success('Welcome back!');
+        }
+        // No need to navigate here, the individual components or App.tsx handles redirect to dashboard
+      }
+    }).catch((error) => {
+      console.error("Redirect Auth Error:", error);
+      if (error.code !== 'auth/no-auth-event') {
+        toast.error(error.message);
+      }
+    });
+
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       if (!firebaseUser) {
@@ -105,9 +141,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (firebaseUser.emailVerified) {
           try {
             const userRef = doc(db, 'users', firebaseUser.uid);
-            await updateDoc(userRef, { isVerified: true });
+            const snap = await getDoc(userRef);
+            if (snap.exists() && !snap.data().isVerified) {
+              await updateDoc(userRef, { 
+                isVerified: true,
+                updatedAt: new Date().toISOString()
+              });
+            }
           } catch (err) {
-            console.error("Error syncing verification status:", err);
+            console.warn("Could not sync verification status (possibly doc creation still in progress):", err);
           }
         }
         // Note: loading will be handled by the profile useEffect when firebaseUser is present
