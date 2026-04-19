@@ -37,20 +37,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
-    // Handle Landing from Google Redirect
-    const handleLanding = async () => {
-      try {
-        const result = await getRedirectResult(auth);
-        if (result?.user) {
-          toast.success('Establishing digital identity...');
-        }
-      } catch (error: any) {
-        if (error.code !== 'auth/no-auth-event') {
-          console.error("Landing error:", error);
-        }
-      }
-    };
-    handleLanding();
+    // Safety Timeout: Never stay in loading more than 4 seconds
+    const safetyTimeout = setTimeout(() => {
+      setLoading(false);
+    }, 4000);
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
@@ -58,29 +48,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!firebaseUser) {
         setProfile(null);
         setLoading(false);
+        clearTimeout(safetyTimeout);
       } else {
-        // Essential: Check/Create Firestore Profile for ANY auth change
-        const userRef = doc(db, 'users', firebaseUser.uid);
-        const snap = await getDoc(userRef);
-        
-        if (!snap.exists()) {
-          const memberId = await generateMemberId(demoUsers);
-          await setDoc(userRef, {
-            uid: firebaseUser.uid,
-            email: firebaseUser.email,
-            fullName: firebaseUser.displayName || 'New Member',
-            role: 'member',
-            memberId,
-            status: 'active',
-            isVerified: firebaseUser.emailVerified || true, // Treat social login as verified
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          });
+        // We have a user! Priority 1: Unblock the UI
+        setLoading(false);
+        clearTimeout(safetyTimeout);
+
+        // Priority 2: Sync Profile (Background)
+        try {
+          const userRef = doc(db, 'users', firebaseUser.uid);
+          const snap = await getDoc(userRef);
+          
+          if (!snap.exists()) {
+            const memberId = await generateMemberId(demoUsers);
+            await setDoc(userRef, {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email,
+              fullName: firebaseUser.displayName || 'New Member',
+              role: 'member',
+              memberId,
+              status: 'active',
+              isVerified: true,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            });
+          }
+        } catch (err) {
+          console.warn("Silent profile sync error:", err);
         }
       }
     });
 
-    return () => unsubscribeAuth();
+    return () => {
+      unsubscribeAuth();
+      clearTimeout(safetyTimeout);
+    };
   }, []);
 
   useEffect(() => {
