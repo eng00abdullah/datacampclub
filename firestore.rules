@@ -1,82 +1,74 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // ===============================================================
-    // Helper Functions
-    // ===============================================================
+
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
-    
+
     function isSuperAdmin() {
-      return isAuthenticated() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super_admin';
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'super_admin';
     }
 
     function isAdmin() {
       return isAuthenticated() && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['super_admin', 'admin']
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+          in ['super_admin', 'admin']
       );
     }
 
-    function isHR() {
+    function isEventManager() {
       return isAuthenticated() && (
-        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['super_admin', 'hr_organizer', 'hr_manager']
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+          in ['super_admin', 'admin', 'event_manager']
       );
     }
 
-    function isValidUser(data) {
-      let requiredFields = ['uid', 'email', 'fullName', 'role', 'memberId'];
-      return data.keys().hasAll(requiredFields) &&
-             data.uid is string && data.email is string && data.fullName is string &&
-             data.role is string && data.memberId is string &&
-             data.fullName.size() > 0 && data.fullName.size() < 100;
+    function isContentManager() {
+      return isAuthenticated() && (
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+          in ['super_admin', 'admin', 'content_manager']
+      );
     }
-
-    function isValidOTP(data) {
-      return data.keys().hasAll(['target', 'otp', 'type', 'expiresAt', 'createdAt']) &&
-             data.target is string && data.otp is string && data.otp.size() == 64 &&
-             data.type in ['email', 'phone'] && data.expiresAt is timestamp;
-    }
-
-    // ===============================================================
-    // Rules
-    // ===============================================================
 
     match /users/{userId} {
-      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin() || isHR());
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
       allow create: if isAuthenticated() && (isOwner(userId) || isAdmin());
-      allow update: if isAuthenticated() && (isOwner(userId) || isAdmin()) && 
-                    (isAdmin() || (isOwner(userId) && request.resource.data.role == resource.data.role));
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        (isOwner(userId) && request.resource.data.role == resource.data.role)
+      );
       allow delete: if isAdmin();
     }
 
     match /events/{eventId} {
       allow read: if true;
-      allow write: if isAdmin() || isHR() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'event_manager';
+      allow write: if isEventManager();
     }
 
     match /staff/{memberId} {
       allow read: if true;
-      allow write: if isAdmin() || isHR();
+      allow write: if isAdmin();
     }
 
     match /blog_posts/{postId} {
       allow read: if true;
-      allow write: if isAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'content_manager';
+      allow write: if isContentManager();
     }
 
     match /projects/{projectId} {
       allow read: if true;
-      allow write: if isAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'content_manager';
+      allow write: if isContentManager();
     }
 
     match /gallery/{imageId} {
       allow read: if true;
-      allow write: if isAdmin() || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'content_manager';
+      allow write: if isContentManager();
     }
 
     match /settings/{settingId} {
@@ -92,19 +84,20 @@ service cloud.firestore {
 
     match /otps/{otpId} {
       allow read: if false;
-      allow create: if true;
-      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['attempts']) &&
-                    request.resource.data.attempts == resource.data.attempts + 1 &&
-                    resource.data.attempts < 5;
+      allow create: if true; 
       allow delete: if true;
-      allow list: if false;
     }
 
     match /id_counters/{counterId} {
       allow read: if isAuthenticated();
       allow update: if isAuthenticated() && counterId == 'global' && 
-                     request.resource.data.count == resource.data.count + 1;
-      allow create, delete: if isAdmin() || isHR();
+                    request.resource.data.count == resource.data.count + 1;
+      allow create: if isAuthenticated() && counterId == 'global' && request.resource.data.count == 1;
+      allow delete: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
