@@ -24,6 +24,7 @@ const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [socialLoading, setSocialLoading] = useState(false);
   const [processingRedirect, setProcessingRedirect] = useState(false);
   const navigate = useNavigate();
 
@@ -131,16 +132,26 @@ const Login = () => {
   };
 
   const handleSocialLogin = async (provider: any) => {
+    if (loading || socialLoading) return;
     if (!isFirebaseReady) {
       return toast.error('Social login is disabled in Demo Mode. Please use email login.');
     }
-    setLoading(true);
+    
+    setSocialLoading(true);
+    
+    // Safety timeout: If redirect doesn't happen in 8 seconds, unlock the UI
+    const timeout = setTimeout(() => {
+      setSocialLoading(false);
+      toast.error('Identity provider is taking too long. Please ensure third-party cookies are enabled or try another browser.');
+    }, 8000);
+
     try {
       // Switch to Redirect for better reliability across domains
       await signInWithRedirect(auth, provider);
     } catch (error: any) {
+      clearTimeout(timeout);
       toast.error(error.message || 'Social Login failed to initialize.');
-      setLoading(false);
+      setSocialLoading(false);
     }
   };
 
@@ -196,13 +207,31 @@ const Login = () => {
 
           <div className="grid grid-cols-1 gap-4">
             <div className="grid grid-cols-3 gap-4">
-              <Button variant="outline" onClick={() => handleSocialLogin(googleProvider)} className="border-white/10" disabled={loading}>
+              <Button 
+                variant="outline" 
+                onClick={() => handleSocialLogin(googleProvider)} 
+                className="border-white/10 relative overflow-hidden" 
+                disabled={loading || socialLoading}
+              >
+                {socialLoading && <div className="absolute inset-0 bg-primary/20 animate-pulse" />}
                 <Chrome className="w-4 h-4" />
               </Button>
-              <Button variant="outline" onClick={() => handleSocialLogin(githubProvider)} className="border-white/10" disabled={loading}>
+              <Button 
+                variant="outline" 
+                onClick={() => handleSocialLogin(githubProvider)} 
+                className="border-white/10 relative overflow-hidden" 
+                disabled={loading || socialLoading}
+              >
+                {socialLoading && <div className="absolute inset-0 bg-primary/20 animate-pulse" />}
                 <Github className="w-4 h-4" />
               </Button>
-              <Button variant="outline" onClick={() => handleSocialLogin(linkedinProvider)} className="border-white/10" disabled={loading}>
+              <Button 
+                variant="outline" 
+                onClick={() => handleSocialLogin(linkedinProvider)} 
+                className="border-white/10 relative overflow-hidden" 
+                disabled={loading || socialLoading}
+              >
+                {socialLoading && <div className="absolute inset-0 bg-primary/20 animate-pulse" />}
                 <Linkedin className="w-4 h-4" />
               </Button>
             </div>

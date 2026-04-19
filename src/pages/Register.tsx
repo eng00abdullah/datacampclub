@@ -33,6 +33,7 @@ const Register = () => {
     academicYear: '',
   });
   const [loading, setLoading] = useState(false);
+  const [socialLoading, setSocialLoading] = useState(false);
   const [processingRedirect, setProcessingRedirect] = useState(false);
   const navigate = useNavigate();
 
@@ -239,17 +240,27 @@ const Register = () => {
   };
 
   const handleSocialRegister = async (provider: any) => {
-    if (loading) return;
+    if (loading || socialLoading) return;
     if (!isFirebaseReady) {
       return toast.error('Social login is disabled in Demo Mode. Please use email registration.');
     }
-    setLoading(true);
+    
+    setSocialLoading(true);
+    
+    // Safety timeout: If redirect doesn't happen in 8 seconds, unlock the UI
+    const timeout = setTimeout(() => {
+      setSocialLoading(false);
+      toast.error('Identity provider is taking too long. Please ensure third-party cookies are enabled or try another browser.');
+    }, 8000);
+
     try {
       // Switch to Redirect for better reliability across domains
       await signInWithRedirect(auth, provider);
+      // If we reach here, the redirect has started, but the page will soon reload anyway.
     } catch (error: any) {
+      clearTimeout(timeout);
       toast.error(error.message || 'Social Registration failed to initialize.');
-      setLoading(false);
+      setSocialLoading(false);
     }
   };
 
@@ -279,28 +290,31 @@ const Register = () => {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <Button 
                   variant="outline" 
-                  className="border-primary/20 hover:bg-primary/10"
+                  className="border-primary/20 hover:bg-primary/10 relative overflow-hidden"
                   onClick={() => handleSocialRegister(googleProvider)}
-                  disabled={loading}
+                  disabled={loading || socialLoading}
                 >
+                  {socialLoading && <div className="absolute inset-0 bg-primary/20 animate-pulse" />}
                   <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-4 h-4 mr-2" alt="Google" />
                   GOOGLE
                 </Button>
                 <Button 
                   variant="outline" 
-                  className="border-primary/20 hover:bg-primary/10"
+                  className="border-primary/20 hover:bg-primary/10 relative overflow-hidden"
                   onClick={() => handleSocialRegister(githubProvider)}
-                  disabled={loading}
+                  disabled={loading || socialLoading}
                 >
+                  {socialLoading && <div className="absolute inset-0 bg-primary/20 animate-pulse" />}
                   <Github className="w-4 h-4 mr-2" />
                   GITHUB
                 </Button>
                 <Button 
                   variant="outline" 
-                  className="border-primary/20 hover:bg-primary/10"
+                  className="border-primary/20 hover:bg-primary/10 relative overflow-hidden"
                   onClick={() => handleSocialRegister(linkedinProvider)}
-                  disabled={loading}
+                  disabled={loading || socialLoading}
                 >
+                  {socialLoading && <div className="absolute inset-0 bg-primary/20 animate-pulse" />}
                   <Linkedin className="w-4 h-4 mr-2" />
                   LINKEDIN
                 </Button>
