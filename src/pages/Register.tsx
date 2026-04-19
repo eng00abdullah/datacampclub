@@ -246,20 +246,59 @@ const Register = () => {
     }
     
     setSocialLoading(true);
-    
-    // Safety timeout: If redirect doesn't happen in 8 seconds, unlock the UI
-    const timeout = setTimeout(() => {
-      setSocialLoading(false);
-      toast.error('Identity provider is taking too long. Please ensure third-party cookies are enabled or try another browser.');
-    }, 8000);
-
     try {
-      // Switch to Redirect for better reliability across domains
-      await signInWithRedirect(auth, provider);
-      // If we reach here, the redirect has started, but the page will soon reload anyway.
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      
+      // 1. First check if the user already exists in Firestore by UID
+      const userRef = doc(db, 'users', user.uid);
+      const userDoc = await getDoc(userRef);
+      
+      if (userDoc.exists()) {
+        toast.success('Welcome back!');
+        navigate('/dashboard');
+        return;
+      }
+
+      // 2. If not, create the user document
+      const existingDoc = await checkExistingUser(user.email || '');
+      let existingData: any = {};
+      
+      if (existingDoc) {
+        existingData = existingDoc.data();
+        if (existingDoc.id !== user.uid) {
+          const { deleteDoc, doc: firestoreDoc } = await import('firebase/firestore');
+          await deleteDoc(firestoreDoc(db, 'users', existingDoc.id));
+        }
+      }
+
+      const memberId = await generateMemberId(demoUsers);
+      await setDoc(userRef, {
+        email: user.email?.toLowerCase().trim(),
+        fullName: user.displayName || 'New Member',
+        phoneNumber: user.phoneNumber || '',
+        faculty: '',
+        academicYear: '',
+        ...existingData,
+        role: 'member',
+        memberId,
+        status: 'active',
+        isVerified: user.emailVerified,
+        createdAt: existingData?.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        uid: user.uid,
+      });
+
+      toast.success('Account initialized successfully.');
+      navigate('/dashboard');
     } catch (error: any) {
-      clearTimeout(timeout);
-      toast.error(error.message || 'Social Registration failed to initialize.');
+      console.error("Registration Error:", error);
+      if (error.code === 'auth/popup-blocked') {
+        toast.error('The popup was blocked by your browser. Please allow popups for this site.');
+      } else {
+        toast.error(error.message || 'Social Registration failed.');
+      }
+    } finally {
       setSocialLoading(false);
     }
   };

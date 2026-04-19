@@ -138,19 +138,39 @@ const Login = () => {
     }
     
     setSocialLoading(true);
-    
-    // Safety timeout: If redirect doesn't happen in 8 seconds, unlock the UI
-    const timeout = setTimeout(() => {
-      setSocialLoading(false);
-      toast.error('Identity provider is taking too long. Please ensure third-party cookies are enabled or try another browser.');
-    }, 8000);
-
     try {
-      // Switch to Redirect for better reliability across domains
-      await signInWithRedirect(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+      
+      // 1. Check if user document exists
+      const userRef = doc(db, 'users', user.uid);
+      const userDoc = await getDoc(userRef);
+      
+      if (!userDoc.exists()) {
+        const memberId = await generateMemberId(demoUsers);
+        await setDoc(userRef, {
+          uid: user.uid,
+          email: user.email,
+          fullName: user.displayName || 'New Member',
+          role: 'member',
+          memberId,
+          status: 'active',
+          isVerified: user.emailVerified,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
+      toast.success('Access Granted.');
+      navigate('/dashboard');
     } catch (error: any) {
-      clearTimeout(timeout);
-      toast.error(error.message || 'Social Login failed to initialize.');
+      console.error("Login Error:", error);
+      if (error.code === 'auth/popup-blocked') {
+        toast.error('The popup was blocked by your browser. Please allow popups for this site.');
+      } else {
+        toast.error(error.message || 'Social Login failed.');
+      }
+    } finally {
       setSocialLoading(false);
     }
   };
