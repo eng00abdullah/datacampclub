@@ -44,56 +44,40 @@ const Register = () => {
     const handleRedirect = async () => {
       try {
         const result = await getRedirectResult(auth);
-        if (result) {
+        
+        if (result?.user) {
           setProcessingRedirect(true);
           const user = result.user;
           
-          // 1. First check if the user already exists in Firestore by UID
+          // 1. Check if profile exists
           const userRef = doc(db, 'users', user.uid);
           const userDoc = await getDoc(userRef);
           
           if (userDoc.exists()) {
-            toast.success('Welcome back!');
-            // Complete operations before navigating
-            navigate('/dashboard');
+            toast.success('Identity verified. Accessing portal...');
+            window.location.href = '/dashboard';
             return;
           }
 
-          // 2. If not, create the user document
-          // Check for existing "pre-created" record by email (migration/cleanup check)
-          const existingDoc = await checkExistingUser(user.email || '');
-          let existingData: any = {};
-          
-          if (existingDoc) {
-            existingData = existingDoc.data();
-            if (existingDoc.id !== user.uid) {
-              const { deleteDoc, doc: firestoreDoc } = await import('firebase/firestore');
-              await deleteDoc(firestoreDoc(db, 'users', existingDoc.id));
-            }
-          }
-
+          // 2. Create profile if it doesn't exist
           const memberId = await generateMemberId(demoUsers);
-          const role = 'member';
-
           await setDoc(userRef, {
             email: user.email?.toLowerCase().trim(),
             fullName: user.displayName || 'New Member',
             phoneNumber: user.phoneNumber || '',
             faculty: '',
             academicYear: '',
-            ...existingData,
             role: 'member',
             memberId,
             status: 'active',
             isVerified: user.emailVerified,
-            createdAt: existingData?.createdAt || new Date().toISOString(),
+            createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
             uid: user.uid,
           });
 
-          // 3. The navigate must happen AFTER all Firestore operations complete
-          toast.success('Account initialized successfully.');
-          navigate('/dashboard');
+          toast.success('Digital identity initialized.');
+          window.location.href = '/dashboard';
         }
       } catch (error: any) {
         if (error.code !== 'auth/null-user' && error.code !== 'auth/no-auth-event') {
@@ -101,12 +85,12 @@ const Register = () => {
           toast.error(error.message || 'Social Registration failed.');
         }
       } finally {
-        setProcessingRedirect(false);
+        // Only stop processing if it's NOT a success (success will redirect via window.location)
       }
     };
 
     handleRedirect();
-  }, [navigate]);
+  }, []);
 
   if (processingRedirect) {
     return (
