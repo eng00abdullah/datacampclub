@@ -122,7 +122,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else {
           toast.success('Welcome back!');
         }
-        // No need to navigate here, the individual components or App.tsx handles redirect to dashboard
+        
+        // Force sync redirect to dashboard if user is on auth pages
+        if (window.location.pathname === '/login' || window.location.pathname === '/register') {
+          window.location.href = '/dashboard';
+        }
       }
     }).catch((error) => {
       console.error("Redirect Auth Error:", error);
