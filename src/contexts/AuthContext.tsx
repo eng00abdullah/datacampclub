@@ -52,15 +52,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
+    // Safety Timeout: Never stay in loading more than 4 seconds
+    const safetyTimeout = setTimeout(() => {
+      setLoading(false);
+    }, 4000);
+
     const initAuth = async () => {
       try {
         const result = await getRedirectResult(auth);
         if (result?.user) {
-          // Handled by listener
+          const firebaseUser = result.user;
+          const userRef = doc(db, 'users', firebaseUser.uid);
+          const snap = await getDoc(userRef);
+          
+          if (!snap.exists()) {
+            const memberId = await generateMemberId(demoUsers);
+            const newProfile: UserProfile = {
+              uid: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              fullName: firebaseUser.displayName || 'New Member',
+              role: 'member',
+              memberId,
+              status: 'active',
+              isVerified: true,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              photoURL: firebaseUser.photoURL || undefined
+            };
+            await setDoc(userRef, newProfile);
+            toast.success('Digital identity initialized.');
+          } else {
+            toast.success('Connection restored.');
+          }
+          window.location.href = '/dashboard';
         }
       } catch (error: any) {
         if (error.code !== 'auth/no-auth-event') {
           console.error("Redirect handler error:", error);
+          toast.error("Session sync failed.");
         }
       }
 
@@ -69,8 +98,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (!firebaseUser) {
           setProfile(null);
           setLoading(false);
+          clearTimeout(safetyTimeout);
         } else {
           try {
+            clearTimeout(safetyTimeout);
             const userRef = doc(db, 'users', firebaseUser.uid);
             const snap = await getDoc(userRef);
             
@@ -92,11 +123,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           } catch (err) {
             console.error("Auth initialization error:", err);
+            setLoading(false);
           }
         }
       });
 
-      return () => unsubscribeAuth();
+      return () => {
+        unsubscribeAuth();
+        clearTimeout(safetyTimeout);
+      };
     };
 
     initAuth();

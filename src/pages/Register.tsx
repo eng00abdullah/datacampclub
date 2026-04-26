@@ -19,18 +19,14 @@ const Register = () => {
 
   if (user) return <Navigate to="/dashboard" />;
 
-  const handleGoogle = async () => {
+  const handleGoogle = () => {
     if (!isFirebaseReady) return toast.error('Firebase not ready');
     setLoading(true);
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      if (result.user) {
-        toast.success('Digital Identity Initialized.');
-      }
+      signInWithRedirect(auth, googleProvider);
     } catch (error: any) {
       console.error(error);
       toast.error(error.message);
-    } finally {
       setLoading(false);
     }
   };
