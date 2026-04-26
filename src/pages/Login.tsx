@@ -3,9 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/Button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../components/ui/Card';
-import { toast } from 'sonner';
 
-// Google SVG Icon
 const GoogleIcon = () => (
   <svg viewBox="0 0 24 24" className="w-5 h-5" xmlns="http://www.w3.org/2000/svg">
     <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -20,29 +18,33 @@ const Login = () => {
   const [isLoading, setIsLoading] = React.useState(false);
   const navigate = useNavigate();
 
-  // Redirect if already logged in
+  // ✅ Redirect بعد ما onAuthStateChanged يسجّل الـ user
   React.useEffect(() => {
     if (user && !authLoading) {
       navigate('/dashboard', { replace: true });
     }
   }, [user, authLoading, navigate]);
 
+  // ✅ لو الـ popup اتقفل من غير تسجيل → وقف الـ loading
+  React.useEffect(() => {
+    if (isLoading && !authLoading && !user) {
+      setIsLoading(false);
+    }
+  }, [authLoading, isLoading, user]);
+
   const handleGoogleSignIn = async () => {
     if (isLoading) return;
     setIsLoading(true);
     try {
       await loginWithGoogle();
-      // Navigation handled by useEffect above after auth state updates
-    } catch (error: any) {
-      // Errors are already handled inside loginWithGoogle in AuthContext
-      console.error('Login error:', error);
-    } finally {
+    } catch {
       setIsLoading(false);
     }
   };
 
-  // Show loading state while auth is initializing
-  if (authLoading) {
+  const showSpinner = isLoading || authLoading;
+
+  if (authLoading && !isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-primary font-cyber animate-pulse text-sm tracking-widest">
@@ -65,14 +67,13 @@ const Login = () => {
         </CardHeader>
 
         <CardContent className="space-y-6 pt-4">
-          {/* Google Sign In Button */}
           <Button
             variant="outline"
             className="w-full border-primary/30 hover:bg-primary/10 h-14 gap-3 text-sm font-cyber tracking-wider"
             onClick={handleGoogleSignIn}
-            disabled={isLoading}
+            disabled={showSpinner}
           >
-            {isLoading ? (
+            {showSpinner ? (
               <>
                 <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
                 <span>AUTHENTICATING...</span>
@@ -85,7 +86,6 @@ const Login = () => {
             )}
           </Button>
 
-          {/* Info note */}
           <p className="text-center text-[10px] text-muted-foreground font-mono leading-relaxed px-2">
             A Google account is required to join the platform.
             <br />

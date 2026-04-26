@@ -52,6 +52,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const isFirstLoad = React.useRef(true);
 
   // Create or fetch user profile in Firestore
   const ensureProfile = async (firebaseUser: FirebaseUser) => {
@@ -95,9 +96,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
         // ✅ User is logged in — set state and stop loading
+        const isNewLogin = isFirstLoad.current === false;
         setUser(currentUser);
         setLoading(false);
+        isFirstLoad.current = false;
         await ensureProfile(currentUser);
+        // Only show welcome toast on actual new sign-in, not on page refresh
+        if (isNewLogin) {
+          toast.success('Welcome to DataCamp Student Club!');
+        }
       } else {
         // No user yet — check if we're coming back from a redirect flow
         try {
@@ -121,6 +128,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
         // ✅ Genuinely no user
+        isFirstLoad.current = false;
         setUser(null);
         setProfile(null);
         setLoading(false);
@@ -151,13 +159,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-      if (result?.user) {
-        await ensureProfile(result.user);
-        toast.success('Welcome to DataCamp Student Club!');
-      }
+      // signInWithPopup will fire onAuthStateChanged automatically on success
+      // which will setUser and setLoading — no need to do it manually here
+      await signInWithPopup(auth, googleProvider);
     } catch (error: any) {
-      // User closed the popup — not an error
+      // User closed the popup — silent, not an error
       if (
         error.code === 'auth/popup-closed-by-user' ||
         error.code === 'auth/cancelled-popup-request'
@@ -179,7 +185,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      // Generic error
       toast.error('Sign-in failed. Please try again.');
       console.error('Google sign-in error:', error);
     }

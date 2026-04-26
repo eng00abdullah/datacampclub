@@ -14,7 +14,6 @@ const GoogleIcon = () => (
   </svg>
 );
 
-// Feature item component
 const FeatureItem = ({ icon, text }: { icon: string; text: string }) => (
   <div className="flex items-center gap-3 text-sm text-muted-foreground">
     <span className="text-primary font-mono text-xs">{icon}</span>
@@ -27,29 +26,33 @@ const Register = () => {
   const [isLoading, setIsLoading] = React.useState(false);
   const navigate = useNavigate();
 
-  // Redirect if already logged in
+  // ✅ Redirect بعد ما onAuthStateChanged يسجّل الـ user
   React.useEffect(() => {
     if (user && !authLoading) {
       navigate('/dashboard', { replace: true });
     }
   }, [user, authLoading, navigate]);
 
+  // ✅ لو الـ popup اتقفل من غير تسجيل → وقف الـ loading
+  React.useEffect(() => {
+    if (isLoading && !authLoading && !user) {
+      setIsLoading(false);
+    }
+  }, [authLoading, isLoading, user]);
+
   const handleGoogleSignUp = async () => {
     if (isLoading) return;
     setIsLoading(true);
     try {
       await loginWithGoogle();
-      // Navigation handled by useEffect above after auth state updates
-    } catch (error: any) {
-      // Errors are already handled inside loginWithGoogle in AuthContext
-      console.error('Register error:', error);
-    } finally {
+    } catch {
       setIsLoading(false);
     }
   };
 
-  // Show loading state while auth is initializing
-  if (authLoading) {
+  const showSpinner = isLoading || authLoading;
+
+  if (authLoading && !isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-primary font-cyber animate-pulse text-sm tracking-widest">
@@ -72,7 +75,6 @@ const Register = () => {
         </CardHeader>
 
         <CardContent className="space-y-6 pt-4">
-          {/* What you get section */}
           <div className="rounded-md border border-primary/10 bg-primary/5 p-4 space-y-3">
             <p className="text-[10px] font-cyber text-primary/60 uppercase tracking-widest mb-3">
               MEMBERSHIP_INCLUDES
@@ -83,14 +85,13 @@ const Register = () => {
             <FeatureItem icon="▸" text="Track your learning progress" />
           </div>
 
-          {/* Google Sign Up Button */}
           <Button
             variant="cyber"
             className="w-full h-14 gap-3 text-sm font-cyber tracking-wider"
             onClick={handleGoogleSignUp}
-            disabled={isLoading}
+            disabled={showSpinner}
           >
-            {isLoading ? (
+            {showSpinner ? (
               <>
                 <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
                 <span>CREATING_ACCOUNT...</span>
@@ -103,7 +104,6 @@ const Register = () => {
             )}
           </Button>
 
-          {/* Info note */}
           <p className="text-center text-[10px] text-muted-foreground font-mono leading-relaxed px-2">
             By joining, you agree to our community guidelines.
             <br />
