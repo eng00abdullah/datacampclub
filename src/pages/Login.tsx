@@ -10,42 +10,74 @@ import { toast } from 'sonner';
 import { Mail, Lock, Chrome } from 'lucide-react';
 
 const Login = () => {
-  const { user, loading: authLoading } = useAuth();
-  const [loading, setLoading] = React.useState(false);
+  const { user, loading: authLoading, loginWithGoogle, authError } = useAuth();
+  const [localLoading, setLocalLoading] = React.useState(false);
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const navigate = useNavigate();
 
-  if (user) return <Navigate to="/dashboard" />;
+  React.useEffect(() => {
+    if (user && !authLoading) {
+      navigate('/dashboard');
+    }
+  }, [user, authLoading, navigate]);
 
-  const handleGoogle = () => {
-    if (!isFirebaseReady) return toast.error('Firebase not ready');
-    setLoading(true);
+  const handleGoogle = async () => {
+    setLocalLoading(true);
     try {
-      signInWithRedirect(auth, googleProvider);
-    } catch (error: any) {
-      console.error(error);
-      toast.error(error.message);
-      setLoading(false);
+      await loginWithGoogle();
+    } finally {
+      setLocalLoading(false);
     }
   };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setLocalLoading(true);
     try {
       await signInWithEmailAndPassword(auth, email, password);
       toast.success('Access Granted.');
-      navigate('/dashboard');
     } catch (error: any) {
       toast.error(error.message);
     } finally {
-      setLoading(false);
+      setLocalLoading(false);
     }
   };
 
+  const isWorking = localLoading || authLoading;
+
   return (
-    <div className="min-h-screen flex items-center justify-center px-6">
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 gap-6">
+      {authError === 'unauthorized-domain' && (
+        <Card className="max-w-md w-full border-red-500/50 bg-red-500/5 backdrop-blur-xl">
+          <CardHeader>
+            <CardTitle className="text-red-500 flex items-center gap-2">
+              <span className="animate-pulse">⚠️</span> CONFIGURATION_ERROR
+            </CardTitle>
+            <CardDescription className="text-red-400/80">
+              The current domain is not authorized in Firebase settings.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 text-xs font-mono">
+            <div className="p-3 bg-black/40 rounded border border-red-500/20">
+              <p className="text-muted-foreground mb-4">To fix this, go to Firebase Console:</p>
+              <a 
+                href="https://console.firebase.google.com/project/datacampclub/authentication/settings" 
+                target="_blank" 
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 text-primary hover:underline font-bold mb-6"
+              >
+                OPEN AUTH_SETTINGS_GATEWAY ↗
+              </a>
+              <p className="text-muted-foreground mb-2 whitespace-nowrap">Add this exact domain to authorized list:</p>
+              <code className="bg-primary/10 text-primary px-3 py-2 rounded inline-block w-full truncate select-all border border-primary/20">
+                {window.location.hostname}
+              </code>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="w-full max-w-md border-primary/20 bg-dark-navy/50 backdrop-blur-xl">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-cyber text-primary tracking-tighter">ESTABLISH_CONNECTION</CardTitle>
@@ -56,7 +88,7 @@ const Login = () => {
             variant="outline" 
             className="w-full border-primary/20 hover:bg-primary/10 h-12"
             onClick={handleGoogle}
-            disabled={loading || authLoading}
+            disabled={isWorking}
           >
             <Chrome className="w-4 h-4 mr-2" />
             GOOGLE_AUTH_PROTOCOL
@@ -82,8 +114,8 @@ const Login = () => {
                 <Input type="password" placeholder="••••••••" className="pl-10" value={password} onChange={e => setPassword(e.target.value)} required />
               </div>
             </div>
-            <Button type="submit" variant="cyber" className="w-full h-12" disabled={loading}>
-              {loading ? 'SYNCHRONIZING...' : 'ESTABLISH_SESSION'}
+            <Button type="submit" variant="cyber" className="w-full h-12" disabled={isWorking}>
+              {isWorking ? 'SYNCHRONIZING...' : 'ESTABLISH_SESSION'}
             </Button>
           </form>
         </CardContent>

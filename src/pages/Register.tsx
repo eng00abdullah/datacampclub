@@ -1,7 +1,7 @@
 import React from 'react';
-import { Link, Navigate } from 'react-router-dom';
-import { signInWithRedirect, signInWithPopup, createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
-import { auth, googleProvider, db, isFirebaseReady } from '../lib/firebase';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
+import { auth, db, isFirebaseReady } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -13,33 +13,35 @@ import { demoUsers } from '../lib/demoData';
 import { useAuth } from '../contexts/AuthContext';
 
 const Register = () => {
-  const { user } = useAuth();
-  const [loading, setLoading] = React.useState(false);
+  const { user, loading: authLoading, loginWithGoogle, authError } = useAuth();
+  const [localLoading, setLocalLoading] = React.useState(false);
   const [formData, setFormData] = React.useState({ fullName: '', email: '', phone: '', password: '', faculty: '' });
+  const navigate = useNavigate();
 
-  if (user) return <Navigate to="/dashboard" />;
+  React.useEffect(() => {
+    if (user && !authLoading) {
+      navigate('/dashboard');
+    }
+  }, [user, authLoading, navigate]);
 
-  const handleGoogle = () => {
-    if (!isFirebaseReady) return toast.error('Firebase not ready');
-    setLoading(true);
+  const handleGoogleAuth = async () => {
+    setLocalLoading(true);
     try {
-      signInWithRedirect(auth, googleProvider);
-    } catch (error: any) {
-      console.error(error);
-      toast.error(error.message);
-      setLoading(false);
+      await loginWithGoogle();
+    } finally {
+      setLocalLoading(false);
     }
   };
 
   const handleEmailSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setLocalLoading(true);
     try {
-      const { user } = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
-      await sendEmailVerification(user);
+      const { user: newUser } = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
+      await sendEmailVerification(newUser);
       const memberId = await generateMemberId(demoUsers);
-      await setDoc(doc(db, 'users', user.uid), {
-        uid: user.uid,
+      await setDoc(doc(db, 'users', newUser.uid), {
+        uid: newUser.uid,
         email: formData.email,
         fullName: formData.fullName,
         phoneNumber: formData.phone,
@@ -55,12 +57,44 @@ const Register = () => {
     } catch (error: any) {
       toast.error(error.message);
     } finally {
-      setLoading(false);
+      setLocalLoading(false);
     }
   };
 
+  const isWorking = localLoading || authLoading;
+
   return (
-    <div className="min-h-screen flex items-center justify-center px-6 py-20">
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 py-20 gap-6">
+      {authError === 'unauthorized-domain' && (
+        <Card className="max-w-2xl w-full border-red-500/50 bg-red-500/5 backdrop-blur-xl">
+          <CardHeader>
+            <CardTitle className="text-red-500 flex items-center gap-2">
+              <span className="animate-pulse">⚠️</span> CONFIGURATION_ERROR
+            </CardTitle>
+            <CardDescription className="text-red-400/80 font-mono text-xs">
+              This domain is not authorized in the Firebase portal.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 text-xs font-mono">
+            <div className="p-3 bg-black/40 rounded border border-red-500/20">
+              <p className="text-muted-foreground mb-4">Fix via Firebase Console:</p>
+              <a 
+                href="https://console.firebase.google.com/project/datacampclub/authentication/settings" 
+                target="_blank" 
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 text-primary hover:underline font-bold mb-6"
+              >
+                OPEN AUTH_SETTINGS_GATEWAY ↗
+              </a>
+              <p className="text-muted-foreground mb-2">Add this domain to the allowlist:</p>
+              <code className="bg-primary/10 text-primary px-3 py-2 rounded inline-block w-full truncate select-all border border-primary/20">
+                {window.location.hostname}
+              </code>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card className="w-full max-w-2xl border-primary/20 bg-dark-navy/60 backdrop-blur-2xl">
         <CardHeader className="text-center">
           <CardTitle className="text-3xl font-cyber text-primary tracking-tighter">INITIALIZE_MEMBERSHIP</CardTitle>
@@ -70,8 +104,8 @@ const Register = () => {
           <Button 
             variant="outline" 
             className="w-full border-primary/20 hover:bg-primary/10 h-12"
-            onClick={handleGoogle}
-            disabled={loading}
+            onClick={handleGoogleAuth}
+            disabled={isWorking}
           >
             <Chrome className="w-4 h-4 mr-2" />
             INITIALIZE_VIA_GOOGLE
@@ -114,8 +148,8 @@ const Register = () => {
               <label className="text-[10px] font-cyber text-muted-foreground uppercase opacity-50">Access_Key</label>
               <Input type="password" placeholder="••••••••" onChange={e => setFormData({...formData, password: e.target.value})} required />
             </div>
-            <Button type="submit" variant="cyber" className="md:col-span-2 w-full h-12 mt-4" disabled={loading}>
-              {loading ? 'PROCESSING_UPLOAD...' : 'CREATE_ACCOUNT'}
+            <Button type="submit" variant="cyber" className="md:col-span-2 w-full h-12 mt-4" disabled={isWorking}>
+              {isWorking ? 'PROCESSING_UPLOAD...' : 'CREATE_ACCOUNT'}
             </Button>
           </form>
         </CardContent>
