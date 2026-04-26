@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { signInWithRedirect, createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
+import { signInWithRedirect, signInWithPopup, createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
 import { auth, googleProvider, db, isFirebaseReady } from '../lib/firebase';
 import { doc, setDoc } from 'firebase/firestore';
 import { Button } from '../components/ui/Button';
@@ -19,10 +19,20 @@ const Register = () => {
 
   if (user) return <Navigate to="/dashboard" />;
 
-  const handleGoogle = () => {
+  const handleGoogle = async () => {
     if (!isFirebaseReady) return toast.error('Firebase not ready');
     setLoading(true);
-    signInWithRedirect(auth, googleProvider);
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      if (result.user) {
+        toast.success('Digital Identity Initialized.');
+      }
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleEmailSignup = async (e: React.FormEvent) => {

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useNavigate, Navigate } from 'react-router-dom';
-import { signInWithRedirect, signInWithEmailAndPassword } from 'firebase/auth';
+import { signInWithRedirect, signInWithPopup, signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, googleProvider, isFirebaseReady } from '../lib/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../components/ui/Button';
@@ -18,10 +18,21 @@ const Login = () => {
 
   if (user) return <Navigate to="/dashboard" />;
 
-  const handleGoogle = () => {
+  const handleGoogle = async () => {
     if (!isFirebaseReady) return toast.error('Firebase not ready');
     setLoading(true);
-    signInWithRedirect(auth, googleProvider);
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      if (result.user) {
+        toast.success('Identity Verified.');
+        // The AuthContext will handle the redirect to dashboard
+      }
+    } catch (error: any) {
+      console.error(error);
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleLogin = async (e: React.FormEvent) => {
