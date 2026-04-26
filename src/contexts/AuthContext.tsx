@@ -94,16 +94,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
+        // ✅ User is logged in — set state and stop loading
         setUser(currentUser);
         setLoading(false);
         await ensureProfile(currentUser);
       } else {
-        // Check for redirect result (fallback for popup-blocked environments)
+        // No user yet — check if we're coming back from a redirect flow
         try {
           const result = await getRedirectResult(auth);
           if (result?.user) {
+            // ✅ Redirect login succeeded — set user and return early (don't null out)
             setUser(result.user);
             await ensureProfile(result.user);
+            setLoading(false);
+            return;
           }
         } catch (err: any) {
           if (err.code === 'auth/unauthorized-domain') {
@@ -116,6 +120,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.error('Redirect result error:', err);
           }
         }
+        // ✅ Genuinely no user
         setUser(null);
         setProfile(null);
         setLoading(false);
