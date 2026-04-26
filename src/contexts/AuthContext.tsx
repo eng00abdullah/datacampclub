@@ -1,14 +1,10 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { 
-  onAuthStateChanged, 
-  User as FirebaseUser, 
-  signOut, 
+import {
+  onAuthStateChanged,
+  User as FirebaseUser,
+  signOut,
   getRedirectResult,
   signInWithPopup,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  sendEmailVerification,
-  GoogleAuthProvider
 } from 'firebase/auth';
 import { doc, onSnapshot, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db, isFirebaseReady, googleProvider } from '../lib/firebase';
@@ -56,14 +52,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [authError, setAuthError] = useState<string | null>(null);
 
-  // Profile creation helper
+  // Create or fetch user profile in Firestore
   const ensureProfile = async (firebaseUser: FirebaseUser) => {
+    if (!isFirebaseReady) return null;
     try {
       const userRef = doc(db, 'users', firebaseUser.uid);
       const snap = await getDoc(userRef);
-      
+
       if (!snap.exists()) {
         const memberId = await generateMemberId(demoUsers);
         const newProfile: UserProfile = {
@@ -73,53 +69,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           role: 'member',
           memberId,
           status: 'active',
-          isVerified: true,
+          isVerified: true, // Google accounts are pre-verified
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
-          photoURL: firebaseUser.photoURL || undefined
+          photoURL: firebaseUser.photoURL || undefined,
         };
         await setDoc(userRef, newProfile);
         return newProfile;
       }
+
       return snap.data() as UserProfile;
     } catch (err) {
-      console.error("Profile creation/check error:", err);
+      console.error('Profile creation/check error:', err);
       return null;
     }
   };
 
+  // Auth state listener
   useEffect(() => {
     if (!isFirebaseReady) {
       setLoading(false);
       return;
     }
 
-    // Auth state listener
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
-      
       if (currentUser) {
+        setUser(currentUser);
         setLoading(false);
-        setAuthError(null);
-        ensureProfile(currentUser);
+        await ensureProfile(currentUser);
       } else {
-        // Only if no user, check for a redirect result
+        // Check for redirect result (fallback for popup-blocked environments)
         try {
           const result = await getRedirectResult(auth);
           if (result?.user) {
-            setAuthError(null);
             setUser(result.user);
             await ensureProfile(result.user);
           }
         } catch (err: any) {
           if (err.code === 'auth/unauthorized-domain') {
-            setAuthError('unauthorized-domain');
             const domain = window.location.hostname;
-            toast.error(`Domain "${domain}" is not authorized.`, { duration: 15000 });
-          } else {
-            console.error("Redirect error:", err);
+            toast.error(
+              `Domain "${domain}" is not authorized. Add it to Firebase Console → Authentication → Authorized Domains.`,
+              { duration: 15000 }
+            );
+          } else if (err.code && err.code !== 'auth/popup-closed-by-user') {
+            console.error('Redirect result error:', err);
           }
         }
+        setUser(null);
         setProfile(null);
         setLoading(false);
       }
@@ -128,52 +125,74 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, []);
 
-  // Separate Profile Sync Effect
+  // Profile real-time sync
   useEffect(() => {
-    if (user && isFirebaseReady) {
-      const unsubscribe = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
-        if (docSnap.exists()) {
-          setProfile(docSnap.data() as UserProfile);
-        }
-      });
-      return () => unsubscribe();
-    }
+    if (!user || !isFirebaseReady) return;
+
+    const unsubscribe = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
+      if (docSnap.exists()) {
+        setProfile(docSnap.data() as UserProfile);
+      }
+    });
+
+    return () => unsubscribe();
   }, [user]);
 
+  // Google Sign In
   const loginWithGoogle = async () => {
-    if (!isFirebaseReady) return;
-    setAuthError(null);
+    if (!isFirebaseReady) {
+      toast.error('Firebase is not configured. Please check your setup.');
+      return;
+    }
+
     try {
       const result = await signInWithPopup(auth, googleProvider);
-      if (result.user) {
+      if (result?.user) {
         await ensureProfile(result.user);
-        toast.success("Successfully authenticated.");
+        toast.success('Welcome to DataCamp Student Club!');
       }
     } catch (error: any) {
-      console.error("Auth error:", error);
-      
+      // User closed the popup — not an error
+      if (
+        error.code === 'auth/popup-closed-by-user' ||
+        error.code === 'auth/cancelled-popup-request'
+      ) {
+        return;
+      }
+
       if (error.code === 'auth/unauthorized-domain') {
-        setAuthError('unauthorized-domain');
         const domain = window.location.hostname;
         toast.error(
-          `Domain Unauthorized: Please add "${domain}" to your Firebase Console (Authentication > Settings > Authorized Domains).`,
+          `Domain "${domain}" is not authorized. Add it in Firebase Console → Authentication → Authorized Domains.`,
           { duration: 15000 }
         );
-      } else if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user') {
-        toast.info("Secure gateway initializing...");
-      } else {
-        toast.error("Authentication failed: " + error.message);
+        return;
       }
+
+      if (error.code === 'auth/popup-blocked') {
+        toast.info('Popup was blocked by your browser. Please allow popups for this site and try again.');
+        return;
+      }
+
+      // Generic error
+      toast.error('Sign-in failed. Please try again.');
+      console.error('Google sign-in error:', error);
     }
   };
 
+  // Logout
   const logout = async () => {
-    await signOut(auth);
-    setUser(null);
-    setProfile(null);
-    setAuthError(null);
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
+      setUser(null);
+      setProfile(null);
+    }
   };
 
+  // Role helpers
   const role = profile?.role || '';
   const isSuperAdmin = role === 'super_admin';
   const isAdmin = isSuperAdmin || role === 'admin';
@@ -182,7 +201,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isContentManager = isSuperAdmin || role === 'content_manager';
   const isFinanceManager = isSuperAdmin || role === 'finance_manager';
   const isOrganizer = isSuperAdmin || role === 'organizer';
-  const isManager = isAdmin || isHR || isEventManager || isContentManager || isFinanceManager || isOrganizer;
+  const isManager =
+    isAdmin || isHR || isEventManager || isContentManager || isFinanceManager || isOrganizer;
 
   const setMockUser = (mockData: any) => {
     if (profile) {
@@ -191,15 +211,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, profile, loading, logout, loginWithGoogle,
-      isSuperAdmin, isAdmin, isHR, isEventManager,
-      isContentManager, isFinanceManager, isOrganizer,
-      isManager,
-      settings: {},
-      setMockUser,
-      authError
-    }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        profile,
+        loading,
+        logout,
+        loginWithGoogle,
+        isSuperAdmin,
+        isAdmin,
+        isHR,
+        isEventManager,
+        isContentManager,
+        isFinanceManager,
+        isOrganizer,
+        isManager,
+        settings: {},
+        setMockUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
