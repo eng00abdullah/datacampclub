@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import {
   onAuthStateChanged,
   User as FirebaseUser,
@@ -52,10 +52,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const isFirstLoad = React.useRef(true);
+  const isInitialized = useRef(false);
+  const profileUnsubscribeRef = useRef<(() => void) | null>(null);
 
   // Create or fetch user profile in Firestore
-  const ensureProfile = async (firebaseUser: FirebaseUser) => {
+  const ensureProfile = async (firebaseUser: FirebaseUser): Promise<UserProfile | null> => {
     if (!isFirebaseReady) return null;
     try {
       const userRef = doc(db, 'users', firebaseUser.uid);
@@ -86,6 +87,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  // Subscribe to real-time profile updates for a given uid
+  const subscribeToProfile = (uid: string) => {
+    // Unsubscribe from any previous profile listener
+    if (profileUnsubscribeRef.current) {
+      profileUnsubscribeRef.current();
+      profileUnsubscribeRef.current = null;
+    }
+
+    if (!isFirebaseReady) return;
+
+    const unsubscribe = onSnapshot(doc(db, 'users', uid), (docSnap) => {
+      if (docSnap.exists()) {
+        setProfile(docSnap.data() as UserProfile);
+      }
+    });
+
+    profileUnsubscribeRef.current = unsubscribe;
+  };
+
   // Auth state listener
   useEffect(() => {
     if (!isFirebaseReady) {
@@ -95,13 +115,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        // ✅ User is logged in — set state and stop loading
-        const isNewLogin = isFirstLoad.current === false;
+        const isNewLogin = isInitialized.current;
+        isInitialized.current = true;
+
         setUser(currentUser);
+
+        // ✅ FIX: Ensure profile exists BEFORE setting loading=false
+        // This prevents Dashboard from opening with profile=null
+        const fetchedProfile = await ensureProfile(currentUser);
+        if (fetchedProfile) {
+          setProfile(fetchedProfile);
+        }
+
+        // Subscribe to real-time updates (will keep profile fresh)
+        subscribeToProfile(currentUser.uid);
+
         setLoading(false);
-        isFirstLoad.current = false;
-        await ensureProfile(currentUser);
-        // Only show welcome toast on actual new sign-in, not on page refresh
+
         if (isNewLogin) {
           toast.success('Welcome to DataCamp Student Club!');
         }
@@ -110,9 +140,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
           const result = await getRedirectResult(auth);
           if (result?.user) {
-            // ✅ Redirect login succeeded — set user and return early (don't null out)
+            // Redirect login succeeded
             setUser(result.user);
-            await ensureProfile(result.user);
+            const fetchedProfile = await ensureProfile(result.user);
+            if (fetchedProfile) {
+              setProfile(fetchedProfile);
+            }
+            subscribeToProfile(result.user.uid);
             setLoading(false);
             return;
           }
@@ -127,29 +161,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             console.error('Redirect result error:', err);
           }
         }
-        // ✅ Genuinely no user
-        isFirstLoad.current = false;
+
+        // Genuinely no user — clean up
+        isInitialized.current = false;
+        if (profileUnsubscribeRef.current) {
+          profileUnsubscribeRef.current();
+          profileUnsubscribeRef.current = null;
+        }
         setUser(null);
         setProfile(null);
         setLoading(false);
       }
     });
 
-    return () => unsubscribe();
-  }, []);
-
-  // Profile real-time sync
-  useEffect(() => {
-    if (!user || !isFirebaseReady) return;
-
-    const unsubscribe = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
-      if (docSnap.exists()) {
-        setProfile(docSnap.data() as UserProfile);
+    return () => {
+      unsubscribe();
+      if (profileUnsubscribeRef.current) {
+        profileUnsubscribeRef.current();
       }
-    });
-
-    return () => unsubscribe();
-  }, [user]);
+    };
+  }, []);
 
   // Google Sign In
   const loginWithGoogle = async () => {
@@ -159,11 +190,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      // signInWithPopup will fire onAuthStateChanged automatically on success
-      // which will setUser and setLoading — no need to do it manually here
       await signInWithPopup(auth, googleProvider);
+      // onAuthStateChanged will fire automatically and handle everything
     } catch (error: any) {
-      // User closed the popup — silent, not an error
       if (
         error.code === 'auth/popup-closed-by-user' ||
         error.code === 'auth/cancelled-popup-request'
@@ -193,6 +222,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Logout
   const logout = async () => {
     try {
+      if (profileUnsubscribeRef.current) {
+        profileUnsubscribeRef.current();
+        profileUnsubscribeRef.current = null;
+      }
       await signOut(auth);
     } catch (err) {
       console.error('Logout error:', err);

@@ -42,10 +42,16 @@ const GuestRoute = ({ children }: { children: React.ReactNode }) => {
 };
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
-  const { user, loading } = useAuth();
+  const { user, profile, loading } = useAuth();
   
+  // Wait for both auth state AND profile to be resolved before making decisions
   if (loading) return <div className="h-screen flex items-center justify-center font-cyber text-primary animate-pulse">ESTABLISHING_SESSION...</div>;
   if (!user) return <Navigate to="/login" />;
+  
+  // If user exists but profile hasn't loaded yet, show a brief loading state
+  if (isFirebaseReady && user && !profile) {
+    return <div className="h-screen flex items-center justify-center font-cyber text-primary animate-pulse">LOADING_PROFILE...</div>;
+  }
   
   return <>{children}</>;
 };

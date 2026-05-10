@@ -26,27 +26,33 @@ const Register = () => {
   const [isLoading, setIsLoading] = React.useState(false);
   const navigate = useNavigate();
 
-  // ✅ Redirect بعد ما onAuthStateChanged يسجّل الـ user
+  // Redirect after user + auth state are ready
   React.useEffect(() => {
     if (user && !authLoading) {
       navigate('/dashboard', { replace: true });
     }
   }, [user, authLoading, navigate]);
 
-  // ✅ لو الـ popup اتقفل من غير تسجيل → وقف الـ loading
+  // Reset local loading if auth resolves without a user (popup closed / cancelled)
   React.useEffect(() => {
-    if (isLoading && !authLoading && !user) {
+    if (!authLoading && !user && isLoading) {
       setIsLoading(false);
     }
-  }, [authLoading, isLoading, user]);
+  }, [authLoading, user, isLoading]);
 
   const handleGoogleSignUp = async () => {
-    if (isLoading) return;
+    if (isLoading || authLoading) return;
     setIsLoading(true);
     try {
       await loginWithGoogle();
     } catch {
-      setIsLoading(false);
+      // loginWithGoogle handles its own errors internally
+    } finally {
+      // Only reset if we didn't successfully log in
+      // (if login succeeded, the useEffect above will navigate away)
+      if (!user) {
+        setIsLoading(false);
+      }
     }
   };
 
